@@ -24,6 +24,6 @@ target_link_libraries(${PROJECT_NAME} KF5::Runner Qt5::Widgets
                       KF5::Service
                       KF5::Plasma)
                       
-install(TARGETS ${PROJECT_NAME} DESTINATION /home/shihira/.local/lib/qt/plugins)
-install(FILES krunner_bridge.desktop DESTINATION ${SERVICES_INSTALL_DIR})
+install(TARGETS ${PROJECT_NAME} DESTINATION $ENV{HOME}/.local/lib/qt/plugins)
+install(FILES krunner_bridge.desktop DESTINATION $ENV{HOME}/.local/share/kservices5)
 

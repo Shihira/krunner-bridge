@@ -7,7 +7,8 @@
 class KRunnerBridge : public Plasma::AbstractRunner {
     Q_OBJECT
 
-    QString script;
+    QStringList scripts;
+    QString cwd;
 
 public:
     KRunnerBridge(QObject* parent, const QVariantList& args);

@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=Scripts
+Name=KRunner Bridge
 Comment=
 Type=Service
 Icon=utilities-terminal
@@ -13,4 +13,5 @@ X-KDE-PluginInfo-Email=fengzhiping@hotmail.com
 X-KDE-PluginInfo-Version=0.0.2
 X-KDE-PluginInfo-License=LGPLv3
 X-KDE-PluginInfo-EnabledByDefault=true
-X-KRunner-Bridge-Script=/home/shihira/Program/Scripts/misc/krunner/search_script.py
+X-KRunner-Bridge-Script-1=example_search.py
+X-KRunner-Bridge-Script-2=example_calc.py
