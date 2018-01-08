@@ -7,7 +7,7 @@ import configparser
 
 class datasource(object):
     def __init__(self, **kwargs):
-        self.data = kwargs.get("data") # save a dict/array/string/numeric here for later usage
+        self.data = kwargs.get("data") # save a dict/array/string/numeric here for later use
         self.text = kwargs.get("text") # display text
         self.cmp = kwargs.get("cmp") # string for matcher comparison
         self.icon = kwargs.get("icon") # icon name. check them in `kdialog --geticon`
@@ -48,7 +48,16 @@ class datasource(object):
         return list(ds)
 
     def fuzzy_match(self, q):
-        pattern = r"(\s|^)" + r"(.*\s|)".join(q)
+        '''
+        "ks"   matches "kde-system_settings"
+        "kss"  matches "KDE System Settings"
+        "kss"  matches "kde/system/settings(old).cpp"
+        "ksc"  matches "kde/system/settings(old).cpp"
+        "ksys" matches "KDE System Settings"
+        "kst"  doesn't match "KDE System Settings"
+        '''
+        pattern = list(map(lambda x: "\\u%04x" % ord(x), q))
+        pattern = r"(\s|^)" + r"(.*\s|)".join(pattern)
         splitted_fn = re.sub(r"(/|_|-|\.|\(|\))", r" \1 ", self.cmp)
         splitted_fn = re.sub(r"([A-Z])", r" \1", splitted_fn)
 
