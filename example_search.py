@@ -2,13 +2,12 @@
 
 import os
 import sys
+import time
+import pickle
 import krunner_bridge
 from krunner_bridge import datasource
 
-dsrc = None
-
 def update_datasource():
-    global dsrc
     dsrc = \
         datasource.from_files("/home/shihira/Program/Scripts/*.py", "utilities-terminal", "Script") + \
         datasource.from_files("/home/shihira/Program/Scripts/*.sh", "utilities-terminal", "Script") + \
@@ -20,22 +19,30 @@ def update_datasource():
     dsrc = map(lambda x: (x.text, x), dsrc)
     dsrc = list(dict(dsrc).values())
 
+    return dsrc
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 @krunner_bridge.init_handler
 def init():
-    pass
+    dsrc = update_datasource()
+    last_update = time.time()
+    with open("/tmp/krunner_bridge_search_cache", "wb") as f:
+        pickle.dump((last_update, dsrc), f)
 
 @krunner_bridge.match_handler
 def match(query):
-    global dsrc
+    with open("/tmp/krunner_bridge_search_cache", "rb") as f:
+        last_update, dsrc = pickle.load(f)
+    if last_update < time.time() - 30 and os.fork() == 0:
+        # fork a new process to update cache
+        init()
+        exit()
 
     result = []
     rank = 1
     choice = 0
-
-    update_datasource()
 
     # number character at the tail of query string is used for quick selection
     if query[-1] in list(map(str, range(1, 10))):

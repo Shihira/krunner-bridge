@@ -5,7 +5,14 @@ import sys
 import glob
 import configparser
 
+def split_into_words(s):
+    sf = re.sub(r"(/|_|-|\.|\(|\))", r" \1 ", s)
+    sf = re.sub(r"([A-Z])", r" \1", sf)
+    return sf
+
 class datasource(object):
+    query_cache = ["", None]
+
     def __init__(self, **kwargs):
         self.data = kwargs.get("data") # save a dict/array/string/numeric here for later use
         self.text = kwargs.get("text") # display text
@@ -21,7 +28,7 @@ class datasource(object):
         ds = map(lambda x: datasource(
             data = x,
             text = os.path.basename(x),
-            cmp = cat + " " + os.path.basename(x),
+            cmp = split_into_words(cat + " " + os.path.basename(x)),
             icon = icon,
             category = cat), ds)
 
@@ -36,12 +43,14 @@ class datasource(object):
             dsk.read(x)
             de = dsk["Desktop Entry"]
 
-            return datasource(
+            d = datasource(
                 data = x,
                 text = de.get("Name"),
                 icon = de.get("Icon"),
-                cmp = cat + " " + de.get("Name"),
+                cmp = split_into_words(cat + " " + de.get("Name")),
                 category = cat)
+
+            return d
 
         ds = map(dsk_map, ds)
 
@@ -56,12 +65,15 @@ class datasource(object):
         "ksys" matches "KDE System Settings"
         "kst"  doesn't match "KDE System Settings"
         '''
-        pattern = list(map(lambda x: "\\u%04x" % ord(x), q))
-        pattern = r"(\s|^)" + r"(.*\s|)".join(pattern)
-        splitted_fn = re.sub(r"(/|_|-|\.|\(|\))", r" \1 ", self.cmp)
-        splitted_fn = re.sub(r"([A-Z])", r" \1", splitted_fn)
 
-        return bool(re.search(pattern, splitted_fn, re.IGNORECASE))
+        if self.query_cache[0] != q:
+            pattern = list(map(lambda x: "\\u%04x" % ord(x), q))
+            pattern = r"(\s|^)" + r"(.*\s|)".join(pattern)
+
+            self.query_cache[0] = q
+            self.query_cache[1] = re.compile(pattern, re.IGNORECASE)
+
+        return bool(self.query_cache[1].search(self.cmp))
 
     def __repr__(self):
         return "<krunner_bridge.datasource text={0} cmp={1}>".format(
@@ -71,16 +83,19 @@ __MATCH_HANDLER = lambda query: []
 def match_handler(func):
     global __MATCH_HANDLER
     __MATCH_HANDLER = func
+    return func
 
 __INIT_HANDLER = lambda: None
 def init_handler(func):
     global __INIT_HANDLER
     __INIT_HANDLER = func
+    return func
 
 __RUN_HANDLER = lambda data: None
 def run_handler(func):
     global __RUN_HANDLER
     __RUN_HANDLER = func
+    return func
 
 def exec():
     args = sys.stdin.read()

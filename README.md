@@ -2,9 +2,13 @@
 
 **Write krunner python plugins the quick way.**
 
-Plasma 5 stopped exposing KDE Framework API to script languages (except QML) for the purpose of so-called stability (but it is not at all stable, crashing from time to time). But this brings some horrible consequence that writing krunner plugins becomes time-consuming. You have to write long C++ code, configure your C++ building toolchain, and compile them each time you modify something.
+<del>Plasma 5 stopped exposing KDE Framework API to script languages (except QML) for the purpose of so-called stability (but it is not at all stable, crashing from time to time). But this brings some horrible consequence that writing krunner plugins becomes time-consuming. You have to write long C++ code, configure your C++ building toolchain, and compile them each time you modify something.</del>
 
 No more pains with ONE plugin for all.
+
+-----
+
+UPDATE: A KDE maintainer has described a way that was newly introduced in KDE 5.11, to make use of DBus to achieve this. See this post: http://blog.davidedmundson.co.uk/blog/cross-process-runners/
 
 ## Installation
 
@@ -86,6 +90,9 @@ For more practical examples, check out `example_search.py` and view the effects 
         - `fuzzy_match(query_string)`: Better matching algorithm. Returns a bool.
 
 ## FAQs
+
+* Q: How does it work actually?
+* A: The C++ plugin just calls python scripts throw spawning subprocess, and passes parameters like `{"operation":"query","query":"kss"}` through standard input, while the script parses this and returns the result set through standard output, formatted in JSON likewise. This mean you can write the script in any language (even bash) as long as you can parse JSON. To note that the script is called everytime there is an action (run/query/init), so make your script finished as quickly as possible, and do not keep alive in background.
 
 * Q: What if I want multiple scripts?
 * A: Just append one more line `X-KRunner-Bridge-Script###=<path/to/your/script>`, where ### can be a number, an ID or anything unique. KRunner bridge searches all properties starting with `X-KRunner-Bridge-Script` and run them one after another. Distinguish them with the category property.

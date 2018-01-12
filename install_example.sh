@@ -1,7 +1,8 @@
 #!/bin/bash
 
-if [ ! -f example.py ]; then
+if [ ! -f example_search.py ]; then
     echo "example.py is missing. Aborted."
+    exit
 fi
 
 if [ ! -d build ]; then
