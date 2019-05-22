@@ -107,3 +107,7 @@ For more practical examples, check out `example_search.py` and view the effects 
 * Q: How can I make some cache to speed up searching?
 * A: Do initialization and slow tasks in `init`, And handle caches by your own. For example, `pickle` your data up and save them in `/tmp`. `datasource` the python class provide some method to generate results, which might be useful.
 
+-----
+
+* Q: I got an error like "The shared library krunner_bridge.so was not found.", how can I resolve it? (#2)
+* A: This may be caused by the misconfigured Qt plugin search path. For user specific path it is usually set to `~/.local/lib/qt/plugins/` (as is done in the cmake build script) in most \*nix dists but some are not. If this problem comes to you, try to set this path to env-var by exporting `export QT_PLUGIN_PATH=~/.local/lib/qt/plugins/`. To ensure it works globally, add it to `.bashrc` or `~/.config/plasma-workspace/env/`.
