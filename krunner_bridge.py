@@ -39,20 +39,23 @@ class datasource(object):
         ds = glob.iglob(glob_pattern, recursive=True)
 
         def dsk_map(x):
-            dsk = configparser.ConfigParser()
-            dsk.read(x)
-            de = dsk["Desktop Entry"]
+            try:
+                dsk = configparser.ConfigParser()
+                dsk.read(x)
+                de = dsk["Desktop Entry"]
 
-            d = datasource(
-                data = x,
-                text = de.get("Name"),
-                icon = de.get("Icon"),
-                cmp = split_into_words(cat + " " + de.get("Name")),
-                category = cat)
+                d = datasource(
+                    data = x,
+                    text = de.get("Name"),
+                    icon = de.get("Icon"),
+                    cmp = split_into_words(cat + " " + de.get("Name")),
+                    category = cat)
 
-            return d
+                return d
+            except:
+                pass
 
-        ds = map(dsk_map, ds)
+        ds = filter(bool, map(dsk_map, ds))
 
         return list(ds)
 
@@ -66,7 +69,7 @@ class datasource(object):
         "kst"  doesn't match "KDE System Settings"
         '''
 
-        if self.query_cache[0] != q:
+        if self.query_cache[0] != q or not self.query_cache[0]:
             pattern = list(map(lambda x: "\\u%04x" % ord(x), q))
             pattern = r"(\s|^)" + r"(.*\s|)".join(pattern)
 

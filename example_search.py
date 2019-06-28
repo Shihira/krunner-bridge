@@ -19,6 +19,11 @@ def update_datasource():
     dsrc = map(lambda x: (x.text, x), dsrc)
     dsrc = list(dict(dsrc).values())
 
+    for i in dsrc:
+        if not i.text.endswith(".py") and not i.text.endswith(".sh"):
+            continue
+        i.text = i.text.replace("_", " ").replace(".py", "").replace(".sh", "").title()
+
     return dsrc
 
 def eprint(*args, **kwargs):
