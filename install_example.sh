@@ -1,16 +1,16 @@
 #!/bin/bash
 
-if [ ! -f example_search.py ]; then
-    echo "example.py is missing. Aborted."
+if [[ ! -f example_search.py || ! -f example_calc.py || ! -f krunner_bridge.py ]]; then
+    echo "Project files are missing. Aborted."
     exit
 fi
 
-if [ ! -d build ]; then
+if [[ ! -d build ]]; then
     mkdir build
 fi
 
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 make install
 

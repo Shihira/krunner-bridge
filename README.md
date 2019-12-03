@@ -22,8 +22,7 @@ Clone this repository to local filesystem and cd into it.
 ```sh
 mkdir build
 cd build
-
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 make install
 ```
@@ -35,7 +34,7 @@ We will try to write a basic calculator using python's eval function.
 Follow the installation instructions and then edit `~/.local/share/kservices5/example_calc.py`:
 
 ```python
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import krunner_bridge
 from math import *

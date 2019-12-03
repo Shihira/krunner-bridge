@@ -9,20 +9,25 @@
 #define KB_ASSERT(cond) {if(!(cond)) {qDebug().nospace() << "[" << script << "] Failed on " << #cond; return;}}
 #define KB_ASSERT_MSG(cond, msg) {if(!(cond)) {qDebug().nospace() << "[" << script << "] " << msg; return;}}
 
-KRunnerBridge::KRunnerBridge(QObject* parent, const QVariantList& args)
-  : Plasma::AbstractRunner(parent, args)
-{
+KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
+        : Plasma::AbstractRunner(parent, args) {
     cwd = QDir::cleanPath(QDir::homePath() + QDir::separator() + ".local/share/kservices5");
-    if(!QDir(cwd).exists()) cwd = "";
+    if (!QDir(cwd).exists()) cwd = "";
 
-    for(const QString& kw : metadata().service()->propertyNames()) {
-        if(kw.startsWith("X-KRunner-Bridge-Script")) {
+    // Read config from file
+    for (const QString &kw : metadata().service()->propertyNames()) {
+        if (kw.startsWith("X-KRunner-Bridge-Script")) {
             QString script = metadata().service()->property(kw, QVariant::String).toString();
             // find the corresponding script in desktop file install path
-            QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
-            if(QFileInfo(abs_script).exists()) script = abs_script;
-
+            const QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
+            if (QFileInfo(abs_script).exists()) script = abs_script;
             scripts.append(script);
+        } else if (kw.startsWith("X-KRunner-Bridge-Run-Timeout")) {
+            runTimeout = metadata().service()->property(kw, QVariant::String).toInt();
+            if (runTimeout <= 0) runTimeout = 2000;
+        } else if (kw.startsWith("X-KRunner-Bridge-Match-Timeout")) {
+            matchTimeout = metadata().service()->property(kw, QVariant::String).toInt();
+            if (matchTimeout <= 0) matchTimeout = 1000;
         }
     }
 
@@ -31,61 +36,55 @@ KRunnerBridge::KRunnerBridge(QObject* parent, const QVariantList& args)
     setHasRunOptions(true);
 
     setDefaultSyntax(Plasma::RunnerSyntax(
-        QString::fromLatin1(":q:"), metadata().comment()));
+            QString::fromLatin1(":q:"), metadata().comment()));
 
-    for(QString& script : scripts) {
+    for (const QString &script : scripts) {
         QProcess process;
         process.setWorkingDirectory(cwd);
         process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
         process.start("sh", QStringList() << "-c" << script);
 
-        QJsonObject command;
-        command.insert("operation", QJsonValue("init"));
 
-        QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
-        process.write(input);
+        process.write(json_init);
         process.closeWriteChannel();
 
-        KB_ASSERT_MSG(process.waitForFinished(1000), "Initialization timeout");
+        KB_ASSERT_MSG(process.waitForFinished(runTimeout), "Initialization timeout");
     }
 }
 
-void KRunnerBridge::match(Plasma::RunnerContext& ctxt)
-{
+void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
     if (!ctxt.isValid()) return;
 
-    for(QString& script : scripts) {
+    // Prepare for input
+    const QString query = ctxt.query();
+    QJsonObject command;
+    command.insert("operation", QJsonValue("match"));
+    command.insert("query", QJsonValue(query));
+    const QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
+
+    for (const QString &script : scripts) {
         QProcess process;
         process.setWorkingDirectory(cwd);
         process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
         process.start("sh", QStringList() << "-c" << script);
 
-        //// Prepare for input
-        QString query = ctxt.query();
-
-        QJsonObject command;
-        command.insert("operation", QJsonValue("match"));
-        command.insert("query", QJsonValue(query));
-
-        QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
         process.write(input);
         process.closeWriteChannel();
 
-        KB_ASSERT_MSG(process.waitForFinished(1000), "Result retrieve timeout");
+        KB_ASSERT_MSG(process.waitForFinished(1000), "Result retrieve timeout")
 
-        //// Retrieve output
-        if(process.exitStatus() == QProcess::CrashExit)
+        // Retrieve output
+        if (process.exitStatus() == QProcess::CrashExit)
             qDebug() << process.readAllStandardError().data();
 
-        QByteArray output = process.readAllStandardOutput();
-        QJsonDocument doc = QJsonDocument::fromJson(output);
+        const QByteArray output = process.readAllStandardOutput();
+        const QJsonDocument doc = QJsonDocument::fromJson(output);
 
-        KB_ASSERT(doc.isObject());
+        KB_ASSERT(doc.isObject())
         QJsonValue v_result = doc.object().value("result");
-        KB_ASSERT(v_result.isArray());
-        QJsonArray results = v_result.toArray();
+        KB_ASSERT(v_result.isArray())
 
-        for(QJsonValue result : results) {
+        for (const auto &result :v_result.toArray()) {
             KB_ASSERT(result.isObject());
             QJsonObject obj = result.toObject();
 
@@ -105,35 +104,37 @@ void KRunnerBridge::match(Plasma::RunnerContext& ctxt)
 #undef MAP_PROPERTY
 
             QJsonValue data = obj.value("data");
-            if(!data.isUndefined()) m.setData(data.toVariant());
+            if (!data.isUndefined()) m.setData(QVariantList({script, data.toVariant()}));
+            else m.setData(QVariantList());
 
-            if(relevance == 1)
-                m.setType(Plasma::QueryMatch::ExactMatch);
-            else m.setType(Plasma::QueryMatch::CompletionMatch);
-
+            m.setType(relevance == 1 ? Plasma::QueryMatch::ExactMatch : Plasma::QueryMatch::CompletionMatch);
             ctxt.addMatch(m);
         }
     }
 }
 
-void KRunnerBridge::run(const Plasma::RunnerContext& ctxt, const Plasma::QueryMatch& match)
-{
-    for(QString& script : scripts) {
-        QProcess process;
-        process.setWorkingDirectory(cwd);
-        process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
-        process.start("sh", QStringList() << "-c" << script);
+void KRunnerBridge::run(const Plasma::RunnerContext &ctxt, const Plasma::QueryMatch &match) {
+    Q_UNUSED(ctxt)
 
-        QJsonObject command;
-        command.insert("operation", QJsonValue("run"));
-        command.insert("data", QJsonValue::fromVariant(match.data()));
+    const QVariantList data = match.data().toList();
+    if (data.size() != 2) return;
 
-        QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
-        process.write(input);
-        process.closeWriteChannel();
+    // Data should only be passed to script that generated the run option
+    const QString script = data.at(0).toString();
+    QJsonObject command;
+    command.insert("operation", QJsonValue("run"));
+    command.insert("data", QJsonValue::fromVariant(data.at(1)));
 
-        KB_ASSERT_MSG(process.waitForFinished(2000), "Running timeout");
-    }
+    QProcess process;
+    process.setWorkingDirectory(cwd);
+    process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    process.start("sh", QStringList() << "-c" << script);
+
+    const QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
+    process.write(input);
+    process.closeWriteChannel();
+
+    KB_ASSERT_MSG(process.waitForFinished(runTimeout), "Running timeout");
 }
 
 K_EXPORT_PLASMA_RUNNER(krunner_bridge, KRunnerBridge)
