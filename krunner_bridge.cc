@@ -71,7 +71,7 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
         process.write(input);
         process.closeWriteChannel();
 
-        KB_ASSERT_MSG(process.waitForFinished(1000), "Result retrieve timeout")
+        KB_ASSERT_MSG(process.waitForFinished(matchTimeout), "Result retrieve timeout")
 
         // Retrieve output
         if (process.exitStatus() == QProcess::CrashExit)
