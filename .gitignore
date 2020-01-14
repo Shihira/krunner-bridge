@@ -2,3 +2,6 @@ build
 __pycache__
 .idea
 cmake-build-debug
+python/build
+python/dist
+python/KRunner_Bridge.egg-info

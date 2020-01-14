@@ -30,11 +30,7 @@ Fedora:
 Clone this repository to local filesystem and cd into it.
 
 ```sh
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-make install
+./install_example.sh
 ```
 
 ## Quick Start

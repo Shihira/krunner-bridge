@@ -80,7 +80,7 @@ class datasource(object):
 
     def __repr__(self):
         return "<krunner_bridge.datasource text={0} cmp={1}>".format(
-                repr(self.text), repr(self.cmp))
+            repr(self.text), repr(self.cmp))
 
 __MATCH_HANDLER = lambda query: []
 def match_handler(func):
