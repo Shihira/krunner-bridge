@@ -101,7 +101,7 @@ def run_handler(func):
     return func
 
 def exec():
-    args = sys.stdin.read()
+    args = sys.argv[1]
     args = json.loads(args)
 
     op = args["operation"]

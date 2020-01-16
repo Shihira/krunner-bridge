@@ -2,6 +2,7 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonArray>
 #include <QtCore/QDebug>
+#include <QThread>
 #include <QtCore/QDir>
 
 #include "krunner_bridge.h"
@@ -38,46 +39,53 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
     setDefaultSyntax(Plasma::RunnerSyntax(
             QString::fromLatin1(":q:"), metadata().comment()));
 
+    const QByteArray json_init = R"({"operation":"init"})";
+    QList<QProcess *> processes;
     for (const QString &script : scripts) {
-        QProcess process;
-        process.setWorkingDirectory(cwd);
-        process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
-        process.start("sh", QStringList() << "-c" << script);
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start("python3", QStringList() << script << json_init);
 
-
-        process.write(json_init);
-        process.closeWriteChannel();
-
-        KB_ASSERT_MSG(process.waitForFinished(runTimeout), "Initialization timeout");
+        process->write(json_init);
+        process->closeWriteChannel();
+        processes.append(process);
+    }
+    for (auto *process:processes) {
+        process->waitForFinished(runTimeout);
+        process->deleteLater();
     }
 }
 
 void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
     if (!ctxt.isValid()) return;
 
-    // Prepare for input
     const QString query = ctxt.query();
     QJsonObject command;
     command.insert("operation", QJsonValue("match"));
     command.insert("query", QJsonValue(query));
     const QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
 
+    // Start all scripts parallel
+    QList<QProcess *> processes;
     for (const QString &script : scripts) {
-        QProcess process;
-        process.setWorkingDirectory(cwd);
-        process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
-        process.start("sh", QStringList() << "-c" << script);
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start("python3", QStringList() << script << input);
+        processes.append(process);
+    }
 
-        process.write(input);
-        process.closeWriteChannel();
-
-        KB_ASSERT_MSG(process.waitForFinished(matchTimeout), "Result retrieve timeout")
+    // Evaluate output of the scripts
+    // TODO Solve using signals
+    for (auto *process:processes) {
+        const QString script = process->program();
+        KB_ASSERT_MSG(process->waitForFinished(matchTimeout), "Result retrieve timeout")
 
         // Retrieve output
-        if (process.exitStatus() == QProcess::CrashExit)
-            qDebug() << process.readAllStandardError().data();
+        if (QProcess::CrashExit == process->exitStatus())
+            qDebug() << process->readAllStandardError().data();
 
-        const QByteArray output = process.readAllStandardOutput();
+        const QByteArray output = process->readAllStandardOutput();
+        process->deleteLater();
         const QJsonDocument doc = QJsonDocument::fromJson(output);
 
         KB_ASSERT(doc.isObject())
@@ -90,6 +98,7 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
 
             Plasma::QueryMatch m(this);
 
+            // Macro generates code that checks if the object has the key and writes it in the match
 #define MAP_PROPERTY(t, camel1, camel2) \
             QJsonValue camel2 = obj.value(#camel2); \
             if(camel2.is##t()) m.set##camel1(camel2.to##t());
