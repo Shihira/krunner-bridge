@@ -4,61 +4,128 @@
 #include <QtCore/QDebug>
 #include <QThread>
 #include <QtCore/QDir>
+#include <KConfigCore/KSharedConfig>
 
 #include "krunner_bridge.h"
 
-#define KB_ASSERT(cond) {if(!(cond)) {qDebug().nospace() << "[" << script << "] Failed on " << #cond; return;}}
-#define KB_ASSERT_MSG(cond, msg) {if(!(cond)) {qDebug().nospace() << "[" << script << "] " << msg; return;}}
+#define KB_ASSERT(cond) {if(!(cond)) {qDebug().nospace() << "[" << script << "] Failed on " << #cond; continue;}}
+#define KB_ASSERT_MSG(cond, msg) {if(!(cond)) {qDebug().nospace() << "[" << script << "] " << msg; continue;}}
 
 KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
         : Plasma::AbstractRunner(parent, args) {
-    cwd = QDir::cleanPath(QDir::homePath() + QDir::separator() + ".local/share/kservices5");
     if (!QDir(cwd).exists()) cwd = "";
+    const QLatin1String krunnerBridgeScriptKey = QLatin1String("X-KRunner-Bridge-Script");
+    const QLatin1String krunnerBridgeRunTimeoutKey = QLatin1String("X-KRunner-Bridge-Run-Timeout");
+    const QLatin1String krunnerBridgeMatchTimeoutKey = QLatin1String("X-KRunner-Bridge-Match-Timeout");
 
     // Read config from file
     for (const QString &kw : metadata().service()->propertyNames()) {
-        if (kw.startsWith("X-KRunner-Bridge-Script")) {
+        if (kw.startsWith(krunnerBridgeScriptKey)) {
             QString script = metadata().service()->property(kw, QVariant::String).toString();
             // find the corresponding script in desktop file install path
-            const QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
-            if (QFileInfo(abs_script).exists()) script = abs_script;
-            scripts.append(script);
-        } else if (kw.startsWith("X-KRunner-Bridge-Run-Timeout")) {
+            if (!QFile::exists(script)) {
+                const QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
+                if (QFileInfo(abs_script).exists()) {
+                    script = abs_script;
+                } else {
+                    qWarning() << "Script " << script << " is not a file";
+                    continue;
+                }
+            }
+            KRunnerScript kRunnerScript;
+            kRunnerScript.filePath = script;
+            scripts.append(kRunnerScript);
+        } else if (kw == krunnerBridgeRunTimeoutKey) {
             runTimeout = metadata().service()->property(kw, QVariant::String).toInt();
             if (runTimeout <= 0) runTimeout = 2000;
-        } else if (kw.startsWith("X-KRunner-Bridge-Match-Timeout")) {
+        } else if (kw == krunnerBridgeMatchTimeoutKey) {
             matchTimeout = metadata().service()->property(kw, QVariant::String).toInt();
             if (matchTimeout <= 0) matchTimeout = 1000;
         }
     }
+    KSharedConfig::Ptr config = KSharedConfig::openConfig(
+            QDir::homePath() + QDir::separator() + ".local/share/kservices5/krunner_bridge.desktop");
+    for (const QString &groupName:config->groupList()) {
+        if (groupName.startsWith(krunnerBridgeScriptKey)) {
+            const KConfigGroup group = config->group(groupName);
+            KRunnerScript script;
+            script.matchRegex = QRegularExpression(group.readEntry("MatchRegex", ".*"));
+            script.launchCommand = group.readEntry("LaunchCommand", "python3");
+            script.filePath = group.readEntry("FilePath");
+            if (script.filePath.isEmpty()) {
+                qWarning() << "No FilePath for " << groupName << " provided";
+                continue;
+            }
+            script.initialize = group.readEntry("Initialize", true);
+            script.prepare = group.readEntry("Prepare", true);
+            script.teardown = group.readEntry("Teardown", true);
+            script.runDetatched = group.readEntry("RunDetatched ", true);
+            scripts.append(script);
+        }
+    }
+    scriptCount = scripts.count();
 
     setSpeed(AbstractRunner::NormalSpeed);
     setPriority(HighestPriority);
     setHasRunOptions(true);
 
-    setDefaultSyntax(Plasma::RunnerSyntax(
-            QString::fromLatin1(":q:"), metadata().comment()));
+    setDefaultSyntax(Plasma::RunnerSyntax(QStringLiteral(":q:"), metadata().comment()));
 
-    const QByteArray json_init = R"({"operation":"init"})";
     QList<QProcess *> processes;
-    for (const QString &script : scripts) {
+    for (const KRunnerScript &script : qAsConst(scripts)) {
         auto *process = new QProcess();
         process->setWorkingDirectory(cwd);
-        process->start("python3", QStringList() << script << json_init);
-
-        process->write(json_init);
-        process->closeWriteChannel();
+        process->start(script.launchCommand, QStringList() << script.filePath << json_init);
         processes.append(process);
     }
-    for (auto *process:processes) {
+    for (auto *process : qAsConst(processes)) {
         process->waitForFinished(runTimeout);
+        process->deleteLater();
+    }
+
+    connect(this, &KRunnerBridge::prepare, this, &KRunnerBridge::prepareForMatchSession);
+    connect(this, &KRunnerBridge::teardown, this, &KRunnerBridge::matchSessionFinished);
+}
+
+void KRunnerBridge::prepareForMatchSession() {
+    QList<QProcess *> processes;
+    for (const KRunnerScript &script : qAsConst(scripts)) {
+        if (!script.prepare) {
+            continue;
+        }
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start(script.launchCommand, QStringList() << script.filePath << json_prepare);
+
+        process->write(json_prepare);
+        process->closeWriteChannel();
+    }
+    for (auto *process : qAsConst(processes)) {
+        process->waitForFinished(matchTimeout);
+        process->deleteLater();
+    }
+}
+
+void KRunnerBridge::matchSessionFinished() {
+    QList<QProcess *> processes;
+    for (const KRunnerScript &script : qAsConst(scripts)) {
+        if (!script.prepare) {
+            continue;
+        }
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start(script.launchCommand, QStringList() << script.filePath << json_teardow);
+    }
+    for (auto *process : qAsConst(processes)) {
+        process->waitForFinished(matchTimeout);
         process->deleteLater();
     }
 }
 
 void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
-    if (!ctxt.isValid()) return;
-
+    if (!ctxt.isValid()) {
+        return;
+    }
     const QString query = ctxt.query();
     QJsonObject command;
     command.insert("operation", QJsonValue("match"));
@@ -67,16 +134,17 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
 
     // Start all scripts parallel
     QList<QProcess *> processes;
-    for (const QString &script : scripts) {
+    for (const KRunnerScript &script : qAsConst(scripts)) {
         auto *process = new QProcess();
         process->setWorkingDirectory(cwd);
-        process->start("python3", QStringList() << script << input);
+        process->start(script.launchCommand, QStringList() << script.filePath << input);
         processes.append(process);
     }
 
     // Evaluate output of the scripts
     // TODO Solve using signals
-    for (auto *process:processes) {
+    for (int i = 0; i < scriptCount; ++i) {
+        auto process = processes.at(i);
         const QString script = process->program();
         KB_ASSERT_MSG(process->waitForFinished(matchTimeout), "Result retrieve timeout")
 
@@ -113,8 +181,11 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
 #undef MAP_PROPERTY
 
             QJsonValue data = obj.value("data");
-            if (!data.isUndefined()) m.setData(QVariantList({script, data.toVariant()}));
-            else m.setData(QVariantList());
+            if (!data.isUndefined()) {
+                m.setData(QVariantList({i, data.toVariant()}));
+            } else {
+                m.setData(QVariantList());
+            }
 
             m.setType(relevance == 1 ? Plasma::QueryMatch::ExactMatch : Plasma::QueryMatch::CompletionMatch);
             ctxt.addMatch(m);
@@ -126,24 +197,21 @@ void KRunnerBridge::run(const Plasma::RunnerContext &ctxt, const Plasma::QueryMa
     Q_UNUSED(ctxt)
 
     const QVariantList data = match.data().toList();
-    if (data.size() != 2) return;
 
-    // Data should only be passed to script that generated the run option
-    const QString script = data.at(0).toString();
+    const KRunnerScript &script = scripts.at(data.at(0).toInt());
     QJsonObject command;
     command.insert("operation", QJsonValue("run"));
     command.insert("data", QJsonValue::fromVariant(data.at(1)));
 
-    QProcess process;
-    process.setWorkingDirectory(cwd);
-    process.setProcessChannelMode(QProcess::ForwardedErrorChannel);
-    process.start("sh", QStringList() << "-c" << script);
-
-    const QByteArray input = QJsonDocument(command).toJson(QJsonDocument::Compact);
-    process.write(input);
-    process.closeWriteChannel();
-
-    KB_ASSERT_MSG(process.waitForFinished(runTimeout), "Running timeout");
+    if (script.runDetatched) {
+        QProcess::startDetached(script.launchCommand,
+                                QStringList() << script.filePath << QJsonDocument(command).toJson(QJsonDocument::Compact));
+    } else {
+        QProcess process;
+        process.setWorkingDirectory(cwd);
+        process.start(script.launchCommand, QStringList() << script.filePath << QJsonDocument(command).toJson(QJsonDocument::Compact));
+        process.waitForFinished(runTimeout);
+    }
 }
 
 K_EXPORT_PLASMA_RUNNER(krunner_bridge, KRunnerBridge)
