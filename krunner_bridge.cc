@@ -19,7 +19,8 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
     const QLatin1String krunnerBridgeMatchTimeoutKey = QLatin1String("X-KRunner-Bridge-Match-Timeout");
 
     // Read config from file
-    for (const QString &kw : metadata().service()->propertyNames()) {
+    const auto keyWords = metadata().service()->propertyNames();
+    for (const QString &kw : keyWords) {
         if (kw.startsWith(krunnerBridgeScriptKey)) {
             QString script = metadata().service()->property(kw, QVariant::String).toString();
             // find the corresponding script in desktop file install path
@@ -45,7 +46,11 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
     }
     KSharedConfig::Ptr config = KSharedConfig::openConfig(
             QDir::homePath() + QDir::separator() + ".local/share/kservices5/krunner_bridge.desktop");
-    for (const QString &groupName:config->groupList()) {
+    bool hasPrepareScript = false;
+    bool hasTeardownScript = false;
+
+    const auto entries = config->groupList();
+    for (const QString &groupName : entries) {
         if (groupName.startsWith(krunnerBridgeScriptKey)) {
             const KConfigGroup group = config->group(groupName);
             KRunnerScript script;
@@ -58,7 +63,13 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
             }
             script.initialize = group.readEntry("Initialize", true);
             script.prepare = group.readEntry("Prepare", true);
+            if (script.prepare) {
+                hasPrepareScript = true;
+            }
             script.teardown = group.readEntry("Teardown", true);
+            if (script.teardown) {
+                hasTeardownScript = true;
+            }
             script.runDetatched = group.readEntry("RunDetatched ", true);
             scripts.append(script);
         }
@@ -83,8 +94,15 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
         process->deleteLater();
     }
 
-    connect(this, &KRunnerBridge::prepare, this, &KRunnerBridge::prepareForMatchSession);
-    connect(this, &KRunnerBridge::teardown, this, &KRunnerBridge::matchSessionFinished);
+    // Connect only if at least one script requires the signal
+    if (hasPrepareScript) {
+        connect(this, &KRunnerBridge::prepare, this, &KRunnerBridge::prepareForMatchSession);
+        qInfo() << "connect prepare";
+    }
+    if (hasTeardownScript) {
+        connect(this, &KRunnerBridge::teardown, this, &KRunnerBridge::matchSessionFinished);
+        qInfo() << "connect teardown";
+    }
 }
 
 void KRunnerBridge::prepareForMatchSession() {
@@ -135,15 +153,17 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
     // Start all scripts parallel
     QList<QProcess *> processes;
     for (const KRunnerScript &script : qAsConst(scripts)) {
-        auto *process = new QProcess();
-        process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << input);
-        processes.append(process);
+        if (script.matchRegex.match(query).hasMatch()) {
+            auto *process = new QProcess();
+            process->setWorkingDirectory(cwd);
+            process->start(script.launchCommand, QStringList() << script.filePath << input);
+            processes.append(process);
+        }
     }
 
     // Evaluate output of the scripts
     // TODO Solve using signals
-    for (int i = 0; i < scriptCount; ++i) {
+    for (int i = 0, processCount = processes.count(); i < processCount; ++i) {
         auto process = processes.at(i);
         const QString script = process->program();
         KB_ASSERT_MSG(process->waitForFinished(matchTimeout), "Result retrieve timeout")
@@ -191,6 +211,7 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
             ctxt.addMatch(m);
         }
     }
+    qDeleteAll(processes);
 }
 
 void KRunnerBridge::run(const Plasma::RunnerContext &ctxt, const Plasma::QueryMatch &match) {
