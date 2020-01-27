@@ -97,11 +97,9 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
     // Connect only if at least one script requires the signal
     if (hasPrepareScript) {
         connect(this, &KRunnerBridge::prepare, this, &KRunnerBridge::prepareForMatchSession);
-        qInfo() << "connect prepare";
     }
     if (hasTeardownScript) {
         connect(this, &KRunnerBridge::teardown, this, &KRunnerBridge::matchSessionFinished);
-        qInfo() << "connect teardown";
     }
 }
 
@@ -114,9 +112,6 @@ void KRunnerBridge::prepareForMatchSession() {
         auto *process = new QProcess();
         process->setWorkingDirectory(cwd);
         process->start(script.launchCommand, QStringList() << script.filePath << json_prepare);
-
-        process->write(json_prepare);
-        process->closeWriteChannel();
     }
     for (auto *process : qAsConst(processes)) {
         process->waitForFinished(matchTimeout);

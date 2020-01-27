@@ -14,5 +14,25 @@ X-KDE-PluginInfo-Version=0.0.2
 X-KDE-PluginInfo-License=LGPLv3
 X-KDE-PluginInfo-EnabledByDefault=true
 
-X-KRunner-Bridge-Run-Timeout=2000
-X-KRunner-Bridge-Match-Timeout=10000
+X-KRunner-Bridge-Run-Timeout=5000
+X-KRunner-Bridge-Match-Timeout=5000
+
+X-KRunner-Bridge-Script-1=example_search.py
+X-KRunner-Bridge-Script-2=example_calc.py
+
+# This is an example entry to show how the config groups can be configured.
+# With these groups you can get additional signals and avoid unnecessary file executions
+[X-KRunner-Bridge-Script-Config-3]
+# Regex used to determine if the script should be executed with the current query
+MatchRegex=^hello
+# Command that gets called with the script and input as parameters
+LaunchCommand=bash
+FilePath=debug_helper.sh
+# Execute script when the KRunner plugins are initialized
+Initialize=true
+# Execute script if match session has started
+Prepare=true
+# Execute script if match session has finished
+Teardown=true
+# Execute script with the run command detached
+RunDetatched=true

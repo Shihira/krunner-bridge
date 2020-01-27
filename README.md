@@ -22,26 +22,26 @@ Requirements:
 * KF5 & Qt5
 
 Debian/Ubuntu:  
-`sudo apt install cmake extra-cmake-modules build-essential libkf5runner-dev libkf5textwidgets-dev qtdeclarative5-dev gettext`
+`sudo apt install cmake extra-cmake-modules build-essential libkf5runner-dev libkf5textwidgets-dev qtdeclarative5-dev gettext libnotify-bin`
 
 openSUSE:  
 `sudo zypper install cmake extra-cmake-modules libQt5Widgets5 libQt5Core5 libqt5-qtlocation-devel ki18n-devel
-ktextwidgets-devel kservice-devel krunner-devel gettext-tools`  
+ktextwidgets-devel kservice-devel krunner-devel gettext-tools libnotify-tools`  
 
 Fedora:  
-`sudo dnf install cmake extra-cmake-modules kf5-ki18n-devel kf5-kservice-devel kf5-krunner-devel kf5-ktextwidgets-devel gettext`  
+`sudo dnf install cmake extra-cmake-modules kf5-ki18n-devel kf5-kservice-devel kf5-krunner-devel kf5-ktextwidgets-devel gettext libnotify`  
 
 Clone this repository to local filesystem and cd into it.
 
 ```sh
-./install_example.sh
+./install.sh
 ```
 
 ## Quick Start
 
 We will try to write a basic calculator using python's eval function.
 
-Follow the installation instructions and then edit `~/.local/share/kservices5/example_calc.py`:
+After installing the plugin you should have te file `~/.local/share/kservices5/example_calc.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -65,7 +65,6 @@ if __name__ == "__main__":
     krunner_bridge.exec()
 ```
 
-Append one line to `~/.local/share/kservices5/krunner_bridge.desktop`, which tells krunner bridge where to find your script.
 
 ```
 echo X-KRunner-Bridge-Script-1=example_calc.py >> $HOME/.local/share/kservices5/krunner_bridge.desktop
