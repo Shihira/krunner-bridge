@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=KRunner Bridge
-Comment=
+Comment=Utility to write KRunner plugins
 Type=Service
 Icon=utilities-terminal
 
@@ -8,14 +8,17 @@ X-KDE-Library=krunner_bridge
 X-KDE-PluginInfo-Name=krunner_bridge
 X-KDE-ServiceTypes=Plasma/Runner
 
-X-KDE-PluginInfo-Author=Shihira Fung
+X-KDE-PluginInfo-Author=Shihira Fung, Alex1701c
 X-KDE-PluginInfo-Email=fengzhiping@hotmail.com
 X-KDE-PluginInfo-Version=0.0.2
 X-KDE-PluginInfo-License=LGPLv3
 X-KDE-PluginInfo-EnabledByDefault=true
 
+X-KRunner-Bridge-Init-Timeout=3000
+X-KRunner-Bridge-Setup-Timeout=3000
+X-KRunner-Bridge-Teardown-Timeout=3000
+X-KRunner-Bridge-Match-Timeout=2000
 X-KRunner-Bridge-Run-Timeout=5000
-X-KRunner-Bridge-Match-Timeout=5000
 
 X-KRunner-Bridge-Script-1=example_search.py
 X-KRunner-Bridge-Script-2=example_calc.py
@@ -35,4 +38,4 @@ Prepare=true
 # Execute script if match session has finished
 Teardown=true
 # Execute script with the run command detached
-RunDetatched=true
+RunDetached=true

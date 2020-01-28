@@ -5,6 +5,7 @@
 #include <QThread>
 #include <QtCore/QDir>
 #include <KConfigCore/KSharedConfig>
+#include <QStringBuilder>
 
 #include "krunner_bridge.h"
 
@@ -13,12 +14,44 @@
 
 KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
         : Plasma::AbstractRunner(parent, args) {
-    if (!QDir(cwd).exists()) cwd = "";
-    const QLatin1String krunnerBridgeScriptKey = QLatin1String("X-KRunner-Bridge-Script");
-    const QLatin1String krunnerBridgeRunTimeoutKey = QLatin1String("X-KRunner-Bridge-Run-Timeout");
-    const QLatin1String krunnerBridgeMatchTimeoutKey = QLatin1String("X-KRunner-Bridge-Match-Timeout");
 
-    // Read config from file
+    setSpeed(AbstractRunner::NormalSpeed);
+    setPriority(HighestPriority);
+    setHasRunOptions(true);
+    setDefaultSyntax(Plasma::RunnerSyntax(QStringLiteral(":q:"), metadata().comment()));
+
+    if (!QDir(cwd).exists()) {
+        cwd = QDir::homePath();
+    }
+
+    initializeTimeouts();
+    parseKRunnerConfigLines();
+    parseKRunnerConfigGroups();
+
+    QList<QProcess *> processes;
+    for (const KRunnerScript &script : qAsConst(scripts)) {
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start(script.launchCommand, QStringList() << script.filePath << json_init);
+        processes.append(process);
+    }
+    for (auto *process : qAsConst(processes)) {
+        process->waitForFinished(initTimeout);
+        process->deleteLater();
+    }
+
+}
+
+void KRunnerBridge::initializeTimeouts() {
+    initTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Init-Timeout"), QVariant::Int).toInt();
+    setupTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Setup-Timeout"), QVariant::Int).toInt();
+    teardownTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Teardown-Timeout"), QVariant::Int).toInt();
+    runTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Run-Timeout"), QVariant::Int).toInt();
+    matchTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Match-Timeout"), QVariant::Int).toInt();
+}
+
+void KRunnerBridge::parseKRunnerConfigLines() {
+    const QLatin1String krunnerBridgeScriptKey = QLatin1String("X-KRunner-Bridge-Script");
     const auto keyWords = metadata().service()->propertyNames();
     for (const QString &kw : keyWords) {
         if (kw.startsWith(krunnerBridgeScriptKey)) {
@@ -36,20 +69,19 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
             KRunnerScript kRunnerScript;
             kRunnerScript.filePath = script;
             scripts.append(kRunnerScript);
-        } else if (kw == krunnerBridgeRunTimeoutKey) {
-            runTimeout = metadata().service()->property(kw, QVariant::String).toInt();
-            if (runTimeout <= 0) runTimeout = 2000;
-        } else if (kw == krunnerBridgeMatchTimeoutKey) {
-            matchTimeout = metadata().service()->property(kw, QVariant::String).toInt();
-            if (matchTimeout <= 0) matchTimeout = 1000;
         }
     }
-    KSharedConfig::Ptr config = KSharedConfig::openConfig(
-            QDir::homePath() + QDir::separator() + ".local/share/kservices5/krunner_bridge.desktop");
+}
+
+void KRunnerBridge::parseKRunnerConfigGroups() {
+    KSharedConfig::Ptr config = KSharedConfig::openConfig(QDir::homePath()
+                                                          % QDir::separator()
+                                                          % QStringLiteral(".local/share/kservices5/krunner_bridge.desktop"));
     bool hasPrepareScript = false;
     bool hasTeardownScript = false;
 
     const auto entries = config->groupList();
+    const QLatin1String krunnerBridgeScriptKey = QLatin1String("X-KRunner-Bridge-Script");
     for (const QString &groupName : entries) {
         if (groupName.startsWith(krunnerBridgeScriptKey)) {
             const KConfigGroup group = config->group(groupName);
@@ -70,28 +102,9 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
             if (script.teardown) {
                 hasTeardownScript = true;
             }
-            script.runDetatched = group.readEntry("RunDetatched ", true);
+            script.runDetatched = group.readEntry("RunDetached ", true);
             scripts.append(script);
         }
-    }
-    scriptCount = scripts.count();
-
-    setSpeed(AbstractRunner::NormalSpeed);
-    setPriority(HighestPriority);
-    setHasRunOptions(true);
-
-    setDefaultSyntax(Plasma::RunnerSyntax(QStringLiteral(":q:"), metadata().comment()));
-
-    QList<QProcess *> processes;
-    for (const KRunnerScript &script : qAsConst(scripts)) {
-        auto *process = new QProcess();
-        process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << json_init);
-        processes.append(process);
-    }
-    for (auto *process : qAsConst(processes)) {
-        process->waitForFinished(runTimeout);
-        process->deleteLater();
     }
 
     // Connect only if at least one script requires the signal
@@ -114,7 +127,7 @@ void KRunnerBridge::prepareForMatchSession() {
         process->start(script.launchCommand, QStringList() << script.filePath << json_prepare);
     }
     for (auto *process : qAsConst(processes)) {
-        process->waitForFinished(matchTimeout);
+        process->waitForFinished(setupTimeout);
         process->deleteLater();
     }
 }
@@ -127,10 +140,10 @@ void KRunnerBridge::matchSessionFinished() {
         }
         auto *process = new QProcess();
         process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << json_teardow);
+        process->start(script.launchCommand, QStringList() << script.filePath << json_teardown);
     }
     for (auto *process : qAsConst(processes)) {
-        process->waitForFinished(matchTimeout);
+        process->waitForFinished(teardownTimeout);
         process->deleteLater();
     }
 }
@@ -177,7 +190,7 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
 
         for (const auto &result :v_result.toArray()) {
             KB_ASSERT(result.isObject());
-            QJsonObject obj = result.toObject();
+            const QJsonObject obj = result.toObject();
 
             Plasma::QueryMatch m(this);
 
@@ -229,6 +242,7 @@ void KRunnerBridge::run(const Plasma::RunnerContext &ctxt, const Plasma::QueryMa
         process.waitForFinished(runTimeout);
     }
 }
+
 
 K_EXPORT_PLASMA_RUNNER(krunner_bridge, KRunnerBridge)
 
