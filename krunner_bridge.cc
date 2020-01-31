@@ -9,7 +9,7 @@
 
 #include "krunner_bridge.h"
 
-#define KB_ASSERT(cond) {if(!(cond)) {qDebug().nospace() << "[" << script << "] Failed on " << #cond; continue;}}
+#define KB_ASSERT(cond) {if(!(cond)) {qDebug().nospace() << "[" << script << "] Failed on " << #cond << "JSON value was: \n" << output; continue;}}
 #define KB_ASSERT_MSG(cond, msg) {if(!(cond)) {qDebug().nospace() << "[" << script << "] " << msg; continue;}}
 
 KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
@@ -24,16 +24,13 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
         cwd = QDir::homePath();
     }
 
-    initializeTimeouts();
+    initializeValues();
     parseKRunnerConfigLines();
     parseKRunnerConfigGroups();
 
     QList<QProcess *> processes;
     for (const KRunnerScript &script : qAsConst(scripts)) {
-        auto *process = new QProcess();
-        process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << json_init);
-        processes.append(process);
+        processes.append(script.startProcess(json_init, cwd));
     }
     for (auto *process : qAsConst(processes)) {
         process->waitForFinished(initTimeout);
@@ -42,12 +39,13 @@ KRunnerBridge::KRunnerBridge(QObject *parent, const QVariantList &args)
 
 }
 
-void KRunnerBridge::initializeTimeouts() {
+void KRunnerBridge::initializeValues() {
     initTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Init-Timeout"), QVariant::Int).toInt();
     setupTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Setup-Timeout"), QVariant::Int).toInt();
     teardownTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Teardown-Timeout"), QVariant::Int).toInt();
     runTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Run-Timeout"), QVariant::Int).toInt();
     matchTimeout = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Match-Timeout"), QVariant::Int).toInt();
+    debugOutput = metadata().service()->property(QStringLiteral("X-KRunner-Bridge-Debug"), QVariant::Bool).toBool();
 }
 
 void KRunnerBridge::parseKRunnerConfigLines() {
@@ -119,12 +117,9 @@ void KRunnerBridge::parseKRunnerConfigGroups() {
 void KRunnerBridge::prepareForMatchSession() {
     QList<QProcess *> processes;
     for (const KRunnerScript &script : qAsConst(scripts)) {
-        if (!script.prepare) {
-            continue;
+        if (script.prepare) {
+            processes.append(script.startProcess(json_prepare, cwd));
         }
-        auto *process = new QProcess();
-        process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << json_prepare);
     }
     for (auto *process : qAsConst(processes)) {
         process->waitForFinished(setupTimeout);
@@ -135,12 +130,9 @@ void KRunnerBridge::prepareForMatchSession() {
 void KRunnerBridge::matchSessionFinished() {
     QList<QProcess *> processes;
     for (const KRunnerScript &script : qAsConst(scripts)) {
-        if (!script.prepare) {
-            continue;
+        if (script.prepare) {
+            processes.append(script.startProcess(json_teardown, cwd));
         }
-        auto *process = new QProcess();
-        process->setWorkingDirectory(cwd);
-        process->start(script.launchCommand, QStringList() << script.filePath << json_teardown);
     }
     for (auto *process : qAsConst(processes)) {
         process->waitForFinished(teardownTimeout);
@@ -162,16 +154,22 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
     QList<QProcess *> processes;
     for (const KRunnerScript &script : qAsConst(scripts)) {
         if (script.matchRegex.match(query).hasMatch()) {
-            auto *process = new QProcess();
-            process->setWorkingDirectory(cwd);
-            process->start(script.launchCommand, QStringList() << script.filePath << input);
-            processes.append(process);
+            processes.append(script.startProcess(input, cwd));
         }
     }
 
     // Evaluate output of the scripts
     // TODO Solve using signals
     for (int i = 0, processCount = processes.count(); i < processCount; ++i) {
+        // Kill processes if context is not valid anymore
+        if (!ctxt.isValid()) {
+            for (auto p: qAsConst(processes)) {
+                p->kill();
+                p->deleteLater();
+            }
+            return;
+        }
+
         auto process = processes.at(i);
         const QString script = process->program();
         KB_ASSERT_MSG(process->waitForFinished(matchTimeout), "Result retrieve timeout")
@@ -187,6 +185,11 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
         KB_ASSERT(doc.isObject())
         QJsonValue v_result = doc.object().value("result");
         KB_ASSERT(v_result.isArray())
+
+        if (debugOutput) {
+            qInfo() << "Debug output for: " << script << " " << process->arguments().at(0);
+            qInfo().noquote() << doc.toJson(QJsonDocument::JsonFormat::Indented);
+        }
 
         for (const auto &result :v_result.toArray()) {
             KB_ASSERT(result.isObject());
@@ -236,10 +239,9 @@ void KRunnerBridge::run(const Plasma::RunnerContext &ctxt, const Plasma::QueryMa
         QProcess::startDetached(script.launchCommand,
                                 QStringList() << script.filePath << QJsonDocument(command).toJson(QJsonDocument::Compact));
     } else {
-        QProcess process;
-        process.setWorkingDirectory(cwd);
-        process.start(script.launchCommand, QStringList() << script.filePath << QJsonDocument(command).toJson(QJsonDocument::Compact));
-        process.waitForFinished(runTimeout);
+        QProcess *p = script.startProcess(QJsonDocument(command).toJson(QJsonDocument::Compact), cwd);
+        p->waitForFinished(runTimeout);
+        p->deleteLater();
     }
 }
 

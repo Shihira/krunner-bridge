@@ -12,6 +12,13 @@ struct KRunnerScript {
     bool prepare = false;
     bool teardown = false;
     bool runDetatched = true;
+
+    QProcess *startProcess(const QByteArray &data, const QString &cwd) const {
+        auto *process = new QProcess();
+        process->setWorkingDirectory(cwd);
+        process->start(launchCommand, QStringList() << filePath << data);
+        return process;
+    }
 };
 
 #endif //KRUNNER_BRIDGE_KRUNNER_SCRIPT_H

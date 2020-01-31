@@ -19,6 +19,7 @@ X-KRunner-Bridge-Setup-Timeout=3000
 X-KRunner-Bridge-Teardown-Timeout=3000
 X-KRunner-Bridge-Match-Timeout=2000
 X-KRunner-Bridge-Run-Timeout=5000
+X-KRunner-Bridge-Debug=false
 
 X-KRunner-Bridge-Script-1=example_search.py
 X-KRunner-Bridge-Script-2=example_calc.py

@@ -11,6 +11,7 @@ Q_OBJECT
 
     QList<KRunnerScript> scripts;
     QString cwd = QDir::cleanPath(QDir::homePath() + QDir::separator() + QStringLiteral(".local/share/kservices5"));
+    bool debugOutput;
     // Timeouts
     int initTimeout;
     int matchTimeout;
@@ -25,7 +26,7 @@ Q_OBJECT
 public:
     KRunnerBridge(QObject *parent, const QVariantList &args);
 
-    void initializeTimeouts();
+    void initializeValues();
 
     void parseKRunnerConfigLines();
 

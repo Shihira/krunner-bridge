@@ -1,9 +1,7 @@
 # KRunner Bridge
 
 TODOS:
-- make some parts of plugin more reusable
 - Use signals for processes
-- Add debug option
 
 **Write krunner python plugins the quick way.**
 
