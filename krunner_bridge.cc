@@ -159,7 +159,6 @@ void KRunnerBridge::match(Plasma::RunnerContext &ctxt) {
     }
 
     // Evaluate output of the scripts
-    // TODO Solve using signals
     for (int i = 0, processCount = processes.count(); i < processCount; ++i) {
         // Kill processes if context is not valid anymore
         if (!ctxt.isValid()) {

@@ -4,7 +4,7 @@
 set -e
 
 cd python
-python3 setup.py install
+python3 setup.py install --user
 cd ..
 
 if [[ ! -d build ]]; then
@@ -23,4 +23,3 @@ install ./debug_helper.sh $HOME/.local/share/kservices5
 
 kquitapp5 krunner 2> /dev/null
 kstart5 --windowclass krunner krunner > /dev/null 2>&1 &
-

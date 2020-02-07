@@ -1,8 +1,5 @@
 # KRunner Bridge
 
-TODOS:
-- Use signals for processes
-
 **Write krunner python plugins the quick way.**
 
 <del>Plasma 5 stopped exposing KDE Framework API to script languages (except QML) for the purpose of so-called stability (but it is not at all stable, crashing from time to time). But this brings some horrible consequence that writing krunner plugins becomes time-consuming. You have to write long C++ code, configure your C++ building toolchain, and compile them each time you modify something.</del>
@@ -75,6 +72,7 @@ For more practical examples, check out `example_search.py`. It searches in my us
 
 ## Configuration
 
+*Note: Whenever you change the config file KRunner has to be restarted: `kquitapp5 krunner;kstart5 krunner`*
 ### Timeouts
 In the `krunner_bridge.desktop` file are already the config entries for the timeouts configured, if you want them
 to take indefinitely long, you can set the value to -1.
@@ -141,6 +139,13 @@ by default it is detached. If set to false you can set a timeout as described ab
 * Q: What if I want multiple scripts?
 * A: Just append one more config entry (line or group), where the key anything unique.
 KRunner bridge searches all properties and groups starting with `X-KRunner-Bridge-Script`.
+
+* Q: How can I update this plugin after with the new features from https://github.com/Shihira/krunner-bridge/pull/3 ?
+* A: You should remove the python api file located at ~/.local/share/kservices5/krunner_bridge.py.
+After this you can install the new version and add the scripts to the config file.
+If you only use python scripts, they should be compatible, otherwise you have to change the json input
+from standard input to the first program argument.
+
 
 -----
 
