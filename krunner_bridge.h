@@ -1,20 +1,46 @@
 #ifndef KRUNNER_BRIDGE
 #define KRUNNER_BRIDGE
 
-#include <QtCore/QProcess>
+#include <QProcess>
+#include <QDir>
 #include <KF5/KRunner/krunner/abstractrunner.h>
+#include "krunner_script.h"
 
 class KRunnerBridge : public Plasma::AbstractRunner {
-    Q_OBJECT
+Q_OBJECT
 
-    QStringList scripts;
-    QString cwd;
+    QList<KRunnerScript> scripts;
+    QString cwd = QDir::cleanPath(QDir::homePath() + QDir::separator() + QStringLiteral(".local/share/kservices5"));
+    bool debugOutput;
+    // Timeouts
+    int initTimeout;
+    int matchTimeout;
+    int runTimeout;
+    int setupTimeout;
+    int teardownTimeout;
+    // Hard coded JSON commands
+    const QByteArray json_init = R"({"operation":"init"})";
+    const QByteArray json_prepare = R"({"operation":"prepare"})";
+    const QByteArray json_teardown = R"({"operation":"teardown"})";
 
 public:
-    KRunnerBridge(QObject* parent, const QVariantList& args);
+    KRunnerBridge(QObject *parent, const QVariantList &args);
 
-    void match(Plasma::RunnerContext&);
-    void run(const Plasma::RunnerContext&, const Plasma::QueryMatch&);
+    void initializeValues();
+
+    void parseKRunnerConfigLines();
+
+    void parseKRunnerConfigGroups();
+
+    void match(Plasma::RunnerContext &) override;
+
+    void run(const Plasma::RunnerContext &, const Plasma::QueryMatch &) override;
+
+protected Q_SLOTS:
+
+    void prepareForMatchSession();
+
+    void matchSessionFinished();
 };
 
 #endif // KRUNNER_BRIDGE

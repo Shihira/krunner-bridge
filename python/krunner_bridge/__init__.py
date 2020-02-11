@@ -80,18 +80,30 @@ class datasource(object):
 
     def __repr__(self):
         return "<krunner_bridge.datasource text={0} cmp={1}>".format(
-                repr(self.text), repr(self.cmp))
-
-__MATCH_HANDLER = lambda query: []
-def match_handler(func):
-    global __MATCH_HANDLER
-    __MATCH_HANDLER = func
-    return func
+            repr(self.text), repr(self.cmp))
 
 __INIT_HANDLER = lambda: None
 def init_handler(func):
     global __INIT_HANDLER
     __INIT_HANDLER = func
+    return func
+
+__SETUP_HANDLER = lambda: None
+def setup_handler(func):
+    global __SETUP_HANDLER
+    __SETUP_HANDLER = func
+    return func
+
+__TEARDOWN_HANDLER = lambda: None
+def teardown_handler(func):
+    global __TEARDOWN_HANDLER
+    __TEARDOWN_HANDLER = func
+    return func
+
+__MATCH_HANDLER = lambda query: []
+def match_handler(func):
+    global __MATCH_HANDLER
+    __MATCH_HANDLER = func
     return func
 
 __RUN_HANDLER = lambda data: None
@@ -101,7 +113,7 @@ def run_handler(func):
     return func
 
 def exec():
-    args = sys.stdin.read()
+    args = sys.argv[1]
     args = json.loads(args)
 
     op = args["operation"]
@@ -125,7 +137,16 @@ def exec():
         print(json.dumps({ "result": result }))
 
     if op == "init":
-        __INIT_HANDLER(**args)
+        __INIT_HANDLER()
+
+    if op == "setup":
+        __SETUP_HANDLER()
+
+    if op == "match":
+        __MATCH_HANDLER(**args)
+
+    if op == "teardown":
+        __TEARDOWN_HANDLER()
 
     if op == "run":
         __RUN_HANDLER(**args)
