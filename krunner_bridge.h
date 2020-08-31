@@ -7,6 +7,8 @@
 class KRunnerBridge : public Plasma::AbstractRunner {
     Q_OBJECT
 
+    KPluginMetaData meta;
+
     QStringList scripts;
     QString cwd;
 

@@ -12,26 +12,31 @@
 KRunnerBridge::KRunnerBridge(QObject* parent, const QVariantList& args)
   : Plasma::AbstractRunner(parent, args)
 {
+    meta = metadata(Plasma::RunnerReturnPluginMetaDataConstant());
+
     cwd = QDir::cleanPath(QDir::homePath() + QDir::separator() + ".local/share/kservices5");
     if(!QDir(cwd).exists()) cwd = "";
 
-    for(const QString& kw : metadata().service()->propertyNames()) {
-        if(kw.startsWith("X-KRunner-Bridge-Script")) {
-            QString script = metadata().service()->property(kw, QVariant::String).toString();
-            // find the corresponding script in desktop file install path
-            QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
-            if(QFileInfo(abs_script).exists()) script = abs_script;
+    for (const QString& kw : meta.rawData().keys()) {
+        if (!kw.startsWith("X-KRunner-Bridge-Script"))
+            continue;
 
-            scripts.append(script);
-        }
+        QString script = meta.value(kw, "");
+        if(script.isEmpty())
+            continue;
+
+        // find the corresponding script in desktop file install path
+        QString abs_script = QDir::cleanPath(cwd + QDir::separator() + script);
+        if(QFileInfo(abs_script).exists()) script = abs_script;
+
+        scripts.append(script);
     }
 
     setSpeed(AbstractRunner::NormalSpeed);
     setPriority(HighestPriority);
-    setHasRunOptions(true);
 
     setDefaultSyntax(Plasma::RunnerSyntax(
-        QString::fromLatin1(":q:"), metadata().comment()));
+        QString::fromLatin1(":q:"), meta.description()));
 
     for(QString& script : scripts) {
         QProcess process;
@@ -118,6 +123,8 @@ void KRunnerBridge::match(Plasma::RunnerContext& ctxt)
 
 void KRunnerBridge::run(const Plasma::RunnerContext& ctxt, const Plasma::QueryMatch& match)
 {
+    Q_UNUSED(ctxt);
+
     for(QString& script : scripts) {
         QProcess process;
         process.setWorkingDirectory(cwd);

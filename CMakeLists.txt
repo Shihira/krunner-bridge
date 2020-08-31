@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 project(krunner_bridge)
 
 find_package(ECM 5.12.0 REQUIRED NO_MODULE)
+set (CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 set (CMAKE_BUILD_TYPE DEBUG)
 set (CMAKE_MODULE_PATH
      ${ECM_MODULE_PATH} ${ECM_KDE_MODULE_DIR} ${CMAKE_MODULE_PATH}
