@@ -101,32 +101,35 @@ def run_handler(func):
     return func
 
 def exec():
-    args = sys.stdin.read()
-    args = json.loads(args)
+    while True:
+        args = sys.stdin.readline()
+        args = json.loads(args)
 
-    op = args["operation"]
-    del args["operation"]
+        op = args["operation"]
+        del args["operation"]
 
-    if op == "match":
-        ds = __MATCH_HANDLER(**args)
+        if op == "match":
+            ds = __MATCH_HANDLER(**args)
 
-        if isinstance(ds, datasource):
-            ds = [ds]
-        if not ds: ds = []
+            if isinstance(ds, datasource):
+                ds = [ds]
+            if not ds: ds = []
 
-        result = list(map(lambda x: {
-            "text": x.text,
-            "relevance": x.relevance,
-            "data": x.data,
-            "iconName": x.icon,
-            "matchCategory": x.category,
-        }, ds))
+            result = list(map(lambda x: {
+                "text": x.text,
+                "relevance": x.relevance,
+                "data": x.data,
+                "iconName": x.icon,
+                "matchCategory": x.category,
+            }, ds))
 
-        print(json.dumps({ "result": result }))
+            print(json.dumps({ "result": result }), end='\n', flush=True)
 
-    if op == "init":
-        __INIT_HANDLER(**args)
+        if op == "init":
+            __INIT_HANDLER(**args)
+            print(json.dumps({ "result": "success" }), end='\n', flush=True)
 
-    if op == "run":
-        __RUN_HANDLER(**args)
+        if op == "run":
+            __RUN_HANDLER(**args)
+            print(json.dumps({ "result": "sucess" }), end='\n', flush=True)
 
